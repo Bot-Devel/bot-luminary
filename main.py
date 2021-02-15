@@ -7,6 +7,7 @@ import os
 from utils.moderation import check_bad_words, get_mod_message, \
     get_show_infractions, get_infraction_msg
 from utils.database import manage_infractions
+from utils.bot_status import keep_alive
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -170,4 +171,5 @@ async def clear_all_infractions(ctx, *, arg):
 
         await ctx.channel.send(embed=clear_infraction_message)
 
+keep_alive()
 bot.run(TOKEN)
