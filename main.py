@@ -10,8 +10,17 @@ from utils.moderation import check_bad_words, get_mod_message
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
+WELCOME = int(os.getenv("WELCOME"))
+BLDISC = int(os.getenv("BLDISC"))
+SPLFREE = int(os.getenv("SPLFREE"))
+RXROLES = int(os.getenv("RXROLES"))
+
+RX_HOUSES = int(os.getenv("RXHOUSES"))
+RX_ANNOUNCEMENTS = int(os.getenv("RXANNOUNCEMENTS"))
+
 intents = discord.Intents.default()
 intents.members = True
+intents.reactions = True
 
 bot = commands.Bot(command_prefix=';', intents=intents)
 
@@ -22,36 +31,54 @@ async def on_ready():
 
 
 @bot.event
-async def on_member_join(member):
-    # greetings channel
-    gr_channel = bot.get_channel(803742201875005440)
-    # black-luminary-discussion channel
-    bl_disc_channel = bot.get_channel(803742258880577547)
-    # spoilerfree-black-luminary channel
-    spl_free_channel = bot.get_channel(806147166434885652)
-
-    welcome = f"Welcome to Black Luminary {member.mention}! Head over to \
-    {bl_disc_channel.mention} if you're caught up with the fic, or to \
-    {spl_free_channel.mention} if you're looking to discuss it while reading!"
-
-    await gr_channel.send(welcome)
+async def on_message(message):
+    await bot.process_commands(message)
 
 
 @bot.event
-async def on_message(message):
+async def on_member_join(member):
+    channel = bot.get_channel(WELCOME)
+    bldisc = bot.get_channel(BLDISC)
+    splfree = bot.get_channel(SPLFREE)
+    welcome = f"Welcome to Black Luminary, {member.mention}! Head over to {bldisc.mention} if you're caught up with the fic, or to {splfree.mention} if you're looking to discuss it while reading!"
+    await channel.send(welcome)
 
-    # moderation
-    bad_words_found = check_bad_words(message)
-    if bad_words_found:
-        current_channel = message.channel
-        mod_log_channel = bot.get_channel(810574629647286294)
+rx_dict_houses = {"gryffindor": "Gryffindor", "ravenclaw": "Ravenclaw",
+                  "slytherin": "Slytherin", "hufflepuff": "Hufflepuff"}
 
-        channel_message, mod_log_message = get_mod_message(
-            bot, message, bad_words_found)
+rx_dict_announcements = {"🗒️": "Story News", "📣": "Announcements"}
 
-        await message.delete()
-        await current_channel.send(embed=channel_message)
-        await mod_log_channel.send(embed=mod_log_message)
+rx_dict_master = {"RX_HOUSES": [RX_HOUSES, rx_dict_houses], "RX_ANNOUNCEMENTS": [
+    RX_ANNOUNCEMENTS, rx_dict_announcements]}
 
+
+@bot.event
+async def on_raw_reaction_add(payload):
+    for i in rx_dict_master.keys():
+        if payload.message_id == rx_dict_master[i][0]:
+            dict_to_use = rx_dict_master[i][1]
+            emote = payload.emoji.name
+            guild_id = payload.guild_id
+            guild = discord.utils.find(lambda g: g.id == guild_id, bot.guilds)
+            if emote in dict_to_use.keys():
+                role = discord.utils.get(guild.roles, name=dict_to_use[emote])
+                member = discord.utils.find(
+                    lambda m: m.id == payload.user_id, guild.members)
+                await member.add_roles(role)
+
+
+@bot.event
+async def on_raw_reaction_remove(payload):
+    for i in rx_dict_master.keys():
+        if payload.message_id == rx_dict_master[i][0]:
+            dict_to_use = rx_dict_master[i][1]
+            emote = payload.emoji.name
+            guild_id = payload.guild_id
+            guild = discord.utils.find(lambda g: g.id == guild_id, bot.guilds)
+            if emote in dict_to_use.keys():
+                role = discord.utils.get(guild.roles, name=dict_to_use[emote])
+                member = discord.utils.find(
+                    lambda m: m.id == payload.user_id, guild.members)
+                await member.remove_roles(role)
 
 bot.run(TOKEN)
