@@ -1,12 +1,13 @@
 import re
 import discord
+from utils.database import manage_infractions
 
 
 def check_bad_words(message):
-    """ 
+    """
     Checks the message for bad words
 
-    ## Returns
+    # Returns
         bad_word_found {list} : A list of bad words used by the user
     """
 
@@ -23,17 +24,17 @@ def check_bad_words(message):
 
 
 def get_mod_message(bot, message, bad_words_found):
-    """ 
+    """
     Creates discord.Embed message for current & mod-logs channels
 
-    ## Returns
+    # Returns
         channel_message {discord.Embed} : Embed message to be sent in the current channel
         mod_log_message {discord.Embed} : Embed message to be sent in the mod-logs channel
     """
 
     bot_luminary = bot.get_user(808068717585891329)
 
-    channel_message = discord.Embed(
+    curr_channel_message = discord.Embed(
         title=str(message.author) + " has been warned",
         description="**Reason**: Bad word usage"
     )
@@ -69,4 +70,54 @@ def get_mod_message(bot, message, bad_words_found):
         name='Message',
         value=f'{message.content}', inline=False)
 
-    return channel_message, mod_log_message
+    return curr_channel_message, mod_log_message
+
+
+def get_show_infractions(msg):
+    """
+    Gets the moderation table from database
+
+    # Returns
+        user_id {int} : Contains user id
+        user_infractions {int} : Contains the number of infractions for the user
+    """
+    # select from table, add infractions
+    show_infractions = manage_infractions(msg.strip(), 3)
+
+    try:
+        user_id = show_infractions[0][0]
+        user_infractions = show_infractions[0][1]
+
+    except IndexError:
+        """
+        If the show_infractions list is empty, it means no infractions found
+        """
+        user_id = None
+        user_infractions = None
+
+    return user_id, user_infractions
+
+
+def get_infraction_msg(user_name, user_infractions):
+    """
+    Creates discord.Embed message for show all infraction for the user command
+
+    # Returns
+        infraction_msg {discord.Embed} : Embed message to be sent for the ;infraction command
+    """
+
+    infraction_msg = discord.Embed()
+
+    infraction_msg.set_author(
+        name="All infractions for the User: " + str(user_name),
+    )
+
+    infraction_msg.add_field(
+        name='User',
+        value=f'{user_name}', inline=True)
+
+    infraction_msg.add_field(
+        name='Total infractions',
+        value=f'{user_infractions}', inline=True)
+
+    return infraction_msg
