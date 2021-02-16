@@ -3,7 +3,7 @@ import discord
 from utils.database import manage_infractions
 
 
-def check_bad_words(message):
+def check_banned_words(message):
     """
     Checks the message for bad words
 
@@ -11,19 +11,19 @@ def check_bad_words(message):
         bad_word_found {list} : A list of bad words used by the user
     """
 
-    bad_words_list = ['retard', 'retarded', 'faggot', 'dyke', 'tranny', 'cunt',
-                      'nigger', 'nigga', 'whore', 'pussy'
-                      ]
+    banned_words_list = ['retard', 'retarded', 'faggot', 'dyke', 'tranny', 'cunt',
+                         'nigger', 'nigga', 'whore', 'pussy'
+                         ]
 
-    bad_word_found = []
-    for word in bad_words_list:
+    banned_word_found = []
+    for word in banned_words_list:
         if re.search(word, message.content) is not None:
-            bad_word_found.append(word)
+            banned_word_found.append(word)
 
-    return bad_word_found
+    return banned_word_found
 
 
-def get_mod_message(bot, message, bad_words_found):
+def get_mod_message(bot, message, banned_word_found):
     """
     Creates discord.Embed message for current & mod-logs channels
 
@@ -64,7 +64,7 @@ def get_mod_message(bot, message, bad_words_found):
 
     mod_log_message.add_field(
         name='Bad words used',
-        value=', '.join(bad_words_found), inline=True)
+        value=', '.join(banned_word_found), inline=True)
 
     mod_log_message.add_field(
         name='Message',
@@ -73,17 +73,20 @@ def get_mod_message(bot, message, bad_words_found):
     return curr_channel_message, mod_log_message
 
 
-def get_show_infractions(msg):
+def get_infractions(msg):
     """
-    Gets the moderation table from database
+    Gets the infractions table from database
 
     # Returns
         user_id {int} : Contains user id
         user_infractions {int} : Contains the number of infractions for the user
     """
-    # select from table, add infractions
-    show_infractions = manage_infractions(msg.strip(), 3)
 
+    # select from table, add infractions
+    if isinstance(msg, str):
+        msg = msg.strip()
+
+    show_infractions = manage_infractions(msg, 3)
     try:
         user_id = show_infractions[0][0]
         user_infractions = show_infractions[0][1]
@@ -93,7 +96,7 @@ def get_show_infractions(msg):
         If the show_infractions list is empty, it means no infractions found
         """
         user_id = None
-        user_infractions = None
+        user_infractions = 0
 
     return user_id, user_infractions
 
