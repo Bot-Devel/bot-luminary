@@ -1,20 +1,26 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands  # , tasks
 from discord.flags import Intents
 from dotenv import load_dotenv
 import os
+import asyncio
 
 from utils.moderation import check_banned_words, get_mod_message, \
-    get_infractions, get_infraction_msg
+    get_infractions, get_infraction_msg, get_user_inf_muted_timeout, \
+    get_modlog_mute_msg
+
 from utils.database import manage_infractions, manage_muted_users
 from utils.bot_status import keep_alive
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
+GUILD = int(os.getenv("GUILD"))
+BOT_LUMINARY = int(os.getenv("BOT_LUMINARY"))
 WELCOME = int(os.getenv("WELCOME"))
 BLDISC = int(os.getenv("BLDISC"))
 SPLFREE = int(os.getenv("SPLFREE"))
+MOD_LOGS = int(os.getenv("MOD_LOGS"))
 RXROLES = int(os.getenv("RXROLES"))
 
 RX_HOUSES = int(os.getenv("RXHOUSES"))
@@ -118,36 +124,71 @@ async def on_message(message):
     await bot.process_commands(message)
 
     # moderation
-    banned_word_found = check_banned_words(message)
-    if banned_word_found:
-        current_channel = message.channel
-        mod_log_channel = bot.get_channel(810574629647286294)
+    # if mods or admin, the roles will be returned i.e. not None
+    if (discord.utils.get(message.author.roles, name="Mods") is None) and (discord.utils.get(message.author.roles, name="Admin") is None):
+        banned_word_found = check_banned_words(message)
+        if banned_word_found:
+            current_channel = message.channel
+            mod_log_channel = bot.get_channel(MOD_LOGS)
 
-        curr_channel_message, mod_log_message = get_mod_message(
-            bot, message, banned_word_found)
+            curr_channel_message, mod_log_warn_message = get_mod_message(
+                bot, message, banned_word_found)
 
-        user_id, user_infractions = get_infractions(message.author.id)
-        if user_infractions <= 3:
-            manage_infractions(message, 1)  # add infractions to database
-            infraction_message = f"{message.author.mention} has been warned. You used a word which is not allowed in this server. You have {user_infractions+1} infractions"
+            timeout_mute = 30
+            moderator = bot.get_user(BOT_LUMINARY)
+            mod_log_mute_message = get_modlog_mute_msg(
+                bot, message.author.id, moderator, timeout_mute)
+            user_id, user_infractions = get_infractions(message.author.id)
 
-        else:
-            role = discord.utils.get(message.guild.roles, name="Muted")
-            member = message.author
-            infraction_message = f"{message.author.mention} has been muted. You used a word which is not allowed in this server. You have {user_infractions+1} infractions"
+            if user_infractions < 3:
+                manage_infractions(message, 1)  # add infractions to database
+                infraction_message = f"{message.author.mention} has been warned. You used a word which is not allowed in this server. You have {user_infractions+1} infractions"
+                await mod_log_channel.send(embed=mod_log_warn_message)
+            else:
+                role = discord.utils.get(message.guild.roles, name="Muted")
+                member = message.author
+                infraction_message = f"{message.author.mention} has been muted. You used a word which is not allowed in this server. You have {user_infractions+1} infractions"
 
-            manage_muted_users(message, 1)  # insert into muted_users table
+                manage_muted_users(message, 1)  # insert into muted_users table
+                await mod_log_channel.send(embed=mod_log_mute_message)
+                await member.add_roles(role)
 
-            await member.add_roles(role)
+            await message.delete()  # deletes the message containing the bad word
+            await current_channel.send(embed=curr_channel_message)
+            await message.author.send(infraction_message)
 
-        await message.delete()  # deletes the message containing the bad word
-        await current_channel.send(embed=curr_channel_message)
-        await message.author.send(infraction_message)
-        await mod_log_channel.send(embed=mod_log_message)
+
+# background task
+async def check_user_inf_mute_status():
+    """
+    check for muted_users and infractions and clear them after 30 mins timeout
+    """
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        guild = bot.get_guild(GUILD)
+
+        timeout_inf = 60
+        timeout_mute = 30
+        users_inf_timeout, users_muted_timeout = get_user_inf_muted_timeout(
+            timeout_inf, timeout_mute)
+
+        for user in users_muted_timeout:
+            manage_muted_users(user, 2)
+
+            role = discord.utils.get(guild.roles, name="Muted")
+            member = guild.get_member(int(user))
+
+            # So that it wont stop if it cant remove a user which doesn exist
+            try:
+                await member.remove_roles(role)
+            except Exception:
+                pass
+
+        await asyncio.sleep(5)
 
 
 @bot.command(aliases=['inf'])
-@commands.has_role("Mods")
+@commands.has_any_role("Mods", "Admin")
 async def infractions(ctx, *, arg):
     """
     Checks the infractions table for user infractions
@@ -168,7 +209,7 @@ async def infractions(ctx, *, arg):
 
 
 @bot.command(aliases=['clr_all_inf', 'clr-all-inf', 'clear-all-infractions'])
-@commands.has_role("Mods")
+@commands.has_any_role("Mods", "Admin")
 async def clear_all_infractions(ctx, *, arg):
     """
     Deletes all infractions for the user from the infractions table
@@ -184,32 +225,44 @@ async def clear_all_infractions(ctx, *, arg):
 
 
 @bot.command()
-@commands.has_role("Mods")
+@commands.has_any_role("Mods", "Admin")
 async def mute(ctx, *, arg):
     """
-    Removes the user from the muted_users table
+    Inserts the user from the muted_users table
     """
+    user = ctx.guild.get_member(int(arg))
 
-    status = manage_muted_users(int(arg), 1)
-    if status:
+    # if mods or admin, the roles will be returned i.e. not None
+    if (discord.utils.get(user.roles, name="Mods") is None) and \
+            (discord.utils.get(user.roles, name="Admin") is None):
+        mod_log_channel = bot.get_channel(MOD_LOGS)
 
-        bot_message = discord.Embed(
-            description="User has been muted!"
-        )
-    role = discord.utils.get(ctx.guild.roles, name="Muted")
-    member = ctx.guild.get_member(int(arg))
+        # inserting into muted_user table
+        status = manage_muted_users(int(arg), 1)
+        if status:
 
-    await member.add_roles(role)
-    await ctx.channel.send(embed=bot_message)
+            bot_message = discord.Embed(
+                description="User has been muted!"
+            )
+
+            timeout_mute = 30
+            moderator = ctx.author
+            mod_log_mute_message = get_modlog_mute_msg(
+                bot, int(arg), moderator, timeout_mute)
+        role = discord.utils.get(ctx.guild.roles, name="Muted")
+        member = ctx.guild.get_member(int(arg))
+
+        await member.add_roles(role)
+        await mod_log_channel.send(embed=mod_log_mute_message)
+        await ctx.channel.send(embed=bot_message)
 
 
-@bot.command()
-@commands.has_role("Mods")
+@ bot.command()
+@ commands.has_any_role("Mods", "Admin")
 async def unmute(ctx, *, arg):
     """
     Removes the user from the muted_users table
     """
-
     status = manage_muted_users(arg, 2)
     if status:
         bot_message = discord.Embed(
@@ -221,5 +274,8 @@ async def unmute(ctx, *, arg):
     await member.remove_roles(role)
     await ctx.channel.send(embed=bot_message)
 
-keep_alive()
+keep_alive()  # To start the flask server
+
+# Creates a background task which checks for user infractions & mute timeout
+bot.loop.create_task(check_user_inf_mute_status())
 bot.run(TOKEN)
