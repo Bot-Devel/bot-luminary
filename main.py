@@ -134,26 +134,32 @@ async def on_message(message):
             curr_channel_message, mod_log_warn_message = get_mod_message(
                 bot, message, banned_word_found)
 
-            timeout_mute = 30
+            timeout_mute = 1
             moderator = bot.get_user(BOT_LUMINARY)
             mod_log_mute_message = get_modlog_mute_msg(
                 bot, message.author.id, moderator, timeout_mute)
             user_id, user_infractions = get_infractions(message.author.id)
 
+            # adding the message.delete inside the if statements cuz the db
+            # operation has a few secs of delay and the msg needs to be deleted immediately
             if user_infractions < 3:
-                manage_infractions(message, 1)  # add infractions to database
+
+                await message.delete()  # deletes the message containing the bad word
                 infraction_message = f"{message.author.mention} has been warned. You used a word which is not allowed in this server. You have {user_infractions+1} infractions"
+                manage_infractions(message, 1)  # add infractions to database
                 await mod_log_channel.send(embed=mod_log_warn_message)
+
             else:
+
+                await message.delete()  # deletes the message containing the bad word
                 role = discord.utils.get(message.guild.roles, name="Muted")
                 member = message.author
-                infraction_message = f"{message.author.mention} has been muted. You used a word which is not allowed in this server. You have {user_infractions+1} infractions"
+                infraction_message = f"{message.author.mention} has been muted. You used a word which is not allowed in this server."
 
+                await member.add_roles(role)
                 manage_muted_users(message, 1)  # insert into muted_users table
                 await mod_log_channel.send(embed=mod_log_mute_message)
-                await member.add_roles(role)
 
-            await message.delete()  # deletes the message containing the bad word
             await current_channel.send(embed=curr_channel_message)
             await message.author.send(infraction_message)
 
@@ -237,6 +243,11 @@ async def mute(ctx, *, arg):
             (discord.utils.get(user.roles, name="Admin") is None):
         mod_log_channel = bot.get_channel(MOD_LOGS)
 
+        role = discord.utils.get(ctx.guild.roles, name="Muted")
+        member = ctx.guild.get_member(int(arg))
+
+        await member.add_roles(role)
+
         # inserting into muted_user table
         status = manage_muted_users(int(arg), 1)
         if status:
@@ -249,10 +260,7 @@ async def mute(ctx, *, arg):
             moderator = ctx.author
             mod_log_mute_message = get_modlog_mute_msg(
                 bot, int(arg), moderator, timeout_mute)
-        role = discord.utils.get(ctx.guild.roles, name="Muted")
-        member = ctx.guild.get_member(int(arg))
 
-        await member.add_roles(role)
         await mod_log_channel.send(embed=mod_log_mute_message)
         await ctx.channel.send(embed=bot_message)
 
@@ -263,15 +271,17 @@ async def unmute(ctx, *, arg):
     """
     Removes the user from the muted_users table
     """
+    role = discord.utils.get(ctx.guild.roles, name="Muted")
+    member = ctx.guild.get_member(int(arg))
+
+    await member.remove_roles(role)
+
     status = manage_muted_users(arg, 2)
     if status:
         bot_message = discord.Embed(
             description="User has been unmuted!"
         )
-    role = discord.utils.get(ctx.guild.roles, name="Muted")
-    member = ctx.guild.get_member(int(arg))
 
-    await member.remove_roles(role)
     await ctx.channel.send(embed=bot_message)
 
 keep_alive()  # To start the flask server
