@@ -7,7 +7,15 @@ import os
 from utils.moderation import check_bad_words, get_mod_message, \
     get_show_infractions, get_infraction_msg
 from utils.database import manage_infractions
-from utils.bot_status import keep_alive
+# from utils.bot_status import keep_alive
+from utils.welcome import welcome_message
+from utils.reaction_roles import rx_dict_master, role_update
+
+intents = discord.Intents.default()
+intents.members = True
+intents.reactions = True
+
+bot = commands.Bot(command_prefix=';', intents=intents)
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -16,20 +24,13 @@ WELCOME = int(os.getenv("WELCOME"))
 BLDISC = int(os.getenv("BLDISC"))
 SPLFREE = int(os.getenv("SPLFREE"))
 RXROLES = int(os.getenv("RXROLES"))
-
-RX_HOUSES = int(os.getenv("RXHOUSES"))
-RX_ANNOUNCEMENTS = int(os.getenv("RXANNOUNCEMENTS"))
-
-
-intents = discord.Intents.default()
-intents.members = True
-intents.reactions = True
-
-bot = commands.Bot(command_prefix=';', intents=intents)
+JOIN_LEAVE = int(os.getenv("JOINLEAVE"))
+MEMBERS_LOG = int(os.getenv("MEMBERSLOG"))
 
 
 @bot.event
 async def on_ready():
+    rx_roles = bot.get_channel(RXROLES)
     await bot.change_presence(
         activity=discord.Game(name="Black Luminary")
     )
@@ -37,37 +38,39 @@ async def on_ready():
 
 @bot.event
 async def on_member_join(member):
-
+    members_log = bot.get_channel(MEMBERS_LOG)
     channel = bot.get_channel(WELCOME)
     bldisc = bot.get_channel(BLDISC)
     splfree = bot.get_channel(SPLFREE)
+    join_leave = bot.get_channel(JOIN_LEAVE)
 
-    welcome = f"Welcome to Black Luminary, {member.mention}! Head over to \
-            {bldisc.mention} if you're caught up with the fic, or to \
-            {splfree.mention} if you're looking to discuss it while reading!"
+    welcome = f"Welcome to Black Luminary, {member.mention}! Head over to {bldisc.mention} if you're caught up with the fic or to {splfree.mention} if you're looking to discuss it while reading!"
+
+    mod_welcome_message = welcome_message(member, 1)
 
     await channel.send(welcome)
 
-rx_dict_houses = {
-    "gryffindor": "Gryffindor",
-    "ravenclaw": "Ravenclaw",
-    "slytherin": "Slytherin",
-    "hufflepuff": "Hufflepuff"
-}
+    role = discord.utils.get(
+        member.guild.roles, name="Person"
+    )
+    await member.add_roles(role)
+    role_update_message = role_update(member, role, 1)
 
-rx_dict_announcements = {
-    "🗒️": "Story News",
-    "📣": "Announcements"
-}
-
-rx_dict_master = {
-    "RX_HOUSES": [RX_HOUSES, rx_dict_houses],
-    "RX_ANNOUNCEMENTS": [RX_ANNOUNCEMENTS, rx_dict_announcements]
-}
+    await join_leave.send(embed=mod_welcome_message)
+    await members_log.send(embed=role_update_message)
 
 
 @bot.event
+async def on_member_remove(member):
+
+    join_leave = bot.get_channel(JOIN_LEAVE)
+    mod_leave_message = welcome_message(member, 0)
+    await join_leave.send(embed=mod_leave_message)
+
+
+@ bot.event
 async def on_raw_reaction_add(payload):
+    members_log = bot.get_channel(MEMBERS_LOG)
     for i in rx_dict_master.keys():
         if payload.message_id == rx_dict_master[i][0]:
 
@@ -88,10 +91,13 @@ async def on_raw_reaction_add(payload):
                     lambda m: m.id == payload.user_id, guild.members
                 )
                 await member.add_roles(role)
+                role_update_message = role_update(member, role, 1)
+                await members_log.send(embed=role_update_message)
 
 
 @bot.event
 async def on_raw_reaction_remove(payload):
+    members_log = bot.get_channel(MEMBERS_LOG)
     for i in rx_dict_master.keys():
         if payload.message_id == rx_dict_master[i][0]:
 
@@ -112,6 +118,8 @@ async def on_raw_reaction_remove(payload):
                     lambda m: m.id == payload.user_id, guild.members
                 )
                 await member.remove_roles(role)
+                role_update_message = role_update(member, role, 0)
+                await members_log.send(embed=role_update_message)
 
 
 @bot.event
@@ -171,5 +179,5 @@ async def clear_all_infractions(ctx, *, arg):
 
         await ctx.channel.send(embed=clear_infraction_message)
 
-keep_alive()
+# keep_alive()
 bot.run(TOKEN)
