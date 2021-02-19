@@ -1,50 +1,171 @@
-import sqlite3
+from sqlalchemy import create_engine
+from sqlalchemy.orm import scoped_session, sessionmaker
+import os
+from datetime import datetime
+from dotenv import load_dotenv
 
-db_file = r"db.sqlite"
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# create an engine which is an object that is used
+# to manage the connection to the database
+engine = create_engine(DATABASE_URL)
 
 
 def manage_infractions(message, operation):
     """
-    Executes sql commands for different operations.
+    Executes insert, update and delete for infractions table
     Operation number is needed for the function.
 
     # Returns
-        True {bool} : For operation 2
-        show_infractions {list} : For operation 3, list containing the infractions data for the user
+
+    True {bool} : For operation 2
+
+    show_infractions {list} : For operation 3, list containing the infractions
+                              data for the user
     """
-    conn = sqlite3.connect(db_file)
-    cursor = conn.cursor()
 
-    if operation == 1:  # insert into table, add infractions
-        cursor.execute(
-            f"SELECT * FROM moderation WHERE user_id={message.author.id}")
+    # create a scoped session
+    db = scoped_session(sessionmaker(bind=engine))
+    curr_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
-        if len(cursor.fetchall()) != 0:  # if user found in table
+    if operation == 1:  # insert/update table, add infractions
+        result = db.execute(
+            f"SELECT * FROM infractions WHERE user_id={message.author.id}")
 
-            cursor.execute(
-                f"UPDATE moderation SET infractions = infractions + 1 WHERE user_id={message.author.id}"
+        if len(result.cursor.fetchall()) != 0:  # if user found in table
+
+            db.execute(
+                f"UPDATE infractions SET infractions = infractions + 1, last_triggered = '{curr_time}' WHERE user_id={message.author.id}"
+
             )
         else:
-            cursor.execute(
-                f"INSERT INTO moderation VALUES ({message.author.id}, 1)"
+
+            db.execute(
+                f"INSERT INTO infractions VALUES ({message.author.id}, 1, '{curr_time}')"
             )
 
-        conn.commit()
-        conn.close()
+        db.commit()
+        db.close()
 
     elif operation == 2:  # delete from table, remove infractions
 
-        cursor.execute(f"DELETE FROM moderation WHERE user_id={message}")
-        conn.commit()
-        conn.close()
+        db.execute(f"DELETE FROM infractions WHERE user_id={message}")
+        db.commit()
+        db.close()
         return True
 
-    elif operation == 3:  # select from table, add infractions
+    elif operation == 3:  # select from table, show infractions
 
-        cursor.execute(f"SELECT * FROM moderation \
+        result = db.execute(f"SELECT * FROM infractions \
                              WHERE user_id={message}")
 
-        show_infractions = cursor.fetchall()
-        conn.commit()
-        conn.close()
+        show_infractions = result.cursor.fetchall()
+        db.commit()
+        db.close()
         return show_infractions
+
+
+def manage_muted_users(message, operation):
+    """
+    Executes insert, update and delete for muted_users table
+    Operation number is needed for the function.
+
+    # Returns
+
+    True {bool} : For operation 2
+
+    show_muted_users {list} : For operation 3, list containing the infractions
+                              data for the user
+    """
+
+    # create a scoped session
+    db = scoped_session(sessionmaker(bind=engine))
+    curr_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+    if operation == 1:  # insert table, add muted_users
+
+        if isinstance(message, int):  # if message is the user_id
+            result = db.execute(
+                f"SELECT * FROM muted_users WHERE user_id={message}")
+        else:
+            result = db.execute(
+                f"SELECT * FROM muted_users WHERE user_id={message.author.id}")
+
+        if len(result.cursor.fetchall()) == 0:  # if user not found in the table
+            if isinstance(message, int):  # if message is the user_id
+                db.execute(
+                    f"INSERT INTO muted_users VALUES ({message}, '{curr_time}')")
+
+            else:
+                db.execute(
+                    f"INSERT INTO muted_users VALUES ({message.author.id}, '{curr_time}')")
+
+        db.commit()
+        db.close()
+        return True
+
+    elif operation == 2:  # delete from table, remove muted_users
+
+        db.execute(
+            f"DELETE FROM muted_users WHERE user_id={message}")
+        db.commit()
+        db.close()
+        return True
+
+    elif operation == 3:  # select from table, show muted_users
+
+        result = db.execute(f"SELECT * FROM muted_users \
+                             WHERE user_id={message}")
+
+        show_muted_users = result.cursor.fetchall()
+        db.commit()
+        db.close()
+        return show_muted_users
+
+
+def check_infractions():
+    """
+    Executes insert, update and delete for muted_users table
+    Operation number is needed for the function.
+
+    # Returns
+
+    True {bool} : For operation 2
+
+    show_muted_users {list} : For operation 3, list containing the infractions
+                              data for the user
+    """
+
+    # create a scoped session
+    db = scoped_session(sessionmaker(bind=engine))
+
+    result = db.execute("SELECT * FROM infractions")
+
+    show_infractions = result.cursor.fetchall()
+    db.commit()
+    db.close()
+    return show_infractions
+
+
+def check_muted_users():
+    """
+    Executes insert, update and delete for muted_users table
+    Operation number is needed for the function.
+
+    # Returns
+
+    True {bool} : For operation 2
+
+    show_muted_users {list} : For operation 3, list containing the infractions
+                              data for the user
+    """
+
+    db = scoped_session(sessionmaker(bind=engine))
+
+    result = db.execute("SELECT * FROM muted_users")
+
+    show_muted_users = result.cursor.fetchall()
+    db.commit()
+    db.close()
+    return show_muted_users
