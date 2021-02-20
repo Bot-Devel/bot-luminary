@@ -210,9 +210,10 @@ def get_inf_muted_diff():
         time = user[2]  # last_triggered column
 
         # to convert each list element into int, remove non-numeric characters
-        time = time.replace("-", ",")
-        time = time.replace(" ", ",")
-        time = time.replace(":", ",")
+        replace_sym = ['-', ' ', ':']
+        for i in replace_sym:
+            time = time.replace(i, ',')
+
         time = time.split(",")
 
         time = list(map(int, time))
@@ -228,9 +229,10 @@ def get_inf_muted_diff():
         time = user[2]  # last_triggered column
 
         # to convert each list element into int, remove non-numeric characters
-        time = time.replace("-", ",")
-        time = time.replace(" ", ",")
-        time = time.replace(":", ",")
+        replace_sym = ['-', ' ', ':']
+        for i in replace_sym:
+            time = time.replace(i, ',')
+
         time = time.split(",")
 
         time = list(map(int, time))
