@@ -4,7 +4,7 @@ from discord.flags import Intents
 from dotenv import load_dotenv
 import os
 
-# from utils.bot_status import keep_alive
+from utils.bot_status import keep_alive
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -117,6 +117,7 @@ async def on_message(message):
     # To run bot.commands & bot.event simultaneously
     await bot.process_commands(message)
 
-# keep_alive()  # To start the flask server
+keep_alive()  # To start the flask server
+
 bot.load_extension("cogs.moderation")
 bot.run(TOKEN)

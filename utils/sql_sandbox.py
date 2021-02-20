@@ -19,7 +19,7 @@ db.execute(
     "CREATE TABLE infractions (user_id bigint PRIMARY KEY, infractions int, last_triggered TEXT);")
 
 db.execute(
-    "CREATE TABLE muted_users (user_id bigint PRIMARY KEY, last_triggered TEXT);")
+    "CREATE TABLE muted_users (user_id bigint PRIMARY KEY, time_out int ,last_triggered TEXT);")
 
 db.execute(
     "INSERT INTO infractions VALUES(8977373771213829,1,'2021-02-17 15:21:20');")
