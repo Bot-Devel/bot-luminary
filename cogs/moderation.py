@@ -1,5 +1,6 @@
 import discord
-from discord.ext import commands, tasks
+from discord.ext import tasks
+from discord.ext.commands import has_any_role, command, Cog
 from dotenv import load_dotenv
 import os
 import asyncio
@@ -16,7 +17,7 @@ BOT_LUMINARY = int(os.getenv("BOT_LUMINARY"))
 MOD_LOGS = int(os.getenv("MOD_LOGS"))
 
 
-class Moderation(commands.Cog):
+class Moderation(Cog):
     def __init__(self, bot):
         self.bot = bot
         self.check_user_inf_mute_status.start()
@@ -24,9 +25,8 @@ class Moderation(commands.Cog):
     def cog_unload(self):
         self.check_user_inf_mute_status.cancel()
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_message(self, message):
-
         # if mods or admin, the roles will be returned i.e. not None
         if (discord.utils.get(message.author.roles, name="Mods") is None) and (discord.utils.get(message.author.roles, name="Admin") is None):
             banned_word_found = check_banned_words(message)
@@ -103,8 +103,8 @@ class Moderation(commands.Cog):
     async def before_check_user_inf_mute_status(self):
         await self.bot.wait_until_ready()
 
-    @commands.command(aliases=['inf'])
-    @commands.has_any_role("Mods", "Admin")
+    @command(aliases=['inf'])
+    @has_any_role("Mods", "Admin")
     async def infractions(self, ctx, member: discord.Member = None):
         """
         Checks the infractions table for user infractions
@@ -123,8 +123,8 @@ class Moderation(commands.Cog):
 
         await ctx.channel.send(embed=user_infraction_message)
 
-    @commands.command(aliases=['clr_all_inf', 'clr-all-inf', 'clear-all-infractions'])
-    @commands.has_any_role("Mods", "Admin")
+    @command(aliases=['clr_all_inf', 'clr-all-inf', 'clear-all-infractions'])
+    @has_any_role("Mods", "Admin")
     async def clear_all_infractions(self, ctx, member: discord.Member = None):
         """
         Deletes all infractions for the user from the infractions table
@@ -138,8 +138,8 @@ class Moderation(commands.Cog):
 
         await ctx.channel.send(embed=clear_infraction_message)
 
-    @commands.command()
-    @commands.has_any_role("Mods", "Admin")
+    @command()
+    @has_any_role("Mods", "Admin")
     async def mute(self, ctx, member: discord.Member = None, time_out=15.0, *, reason=None):
         """
         Inserts the user to the muted_users table and sends a mute event message
@@ -169,8 +169,8 @@ class Moderation(commands.Cog):
             await mod_log_channel.send(embed=mod_log_mute_message)
             await ctx.channel.send(embed=bot_message)
 
-    @commands.command()
-    @commands.has_any_role("Mods", "Admin")
+    @command()
+    @has_any_role("Mods", "Admin")
     async def unmute(self, ctx, member: discord.Member = None, *, reason=None):
         """
         Removes the user from the muted_users table
@@ -179,8 +179,8 @@ class Moderation(commands.Cog):
 
         await member.remove_roles(role)
 
-    @commands.command()
-    @commands.has_any_role("Mods", "Admin")
+    @command()
+    @has_any_role("Mods", "Admin")
     async def ban(self, ctx, member: discord.User = None, *, reason=None):
 
         mod_log_channel = self.bot.get_channel(MOD_LOGS)
@@ -202,8 +202,8 @@ class Moderation(commands.Cog):
         await mod_log_channel.send(embed=mod_log_ban_message)
         await ctx.channel.send(f"{member} is banned!")
 
-    @commands.command()
-    @commands.has_any_role("Mods", "Admin")
+    @command()
+    @has_any_role("Mods", "Admin")
     async def unban(self, ctx, member: discord.User = None, *, reason=None):
 
         mod_log_channel = self.bot.get_channel(MOD_LOGS)
@@ -225,8 +225,8 @@ class Moderation(commands.Cog):
         await ctx.guild.unban(member, reason=reason)
         await mod_log_channel.send(embed=mod_log_ban_message)
 
-    @commands.command()
-    @commands.has_any_role("Mods", "Admin")
+    @command()
+    @has_any_role("Mods", "Admin")
     async def kick(self, ctx, member: discord.User = None, *, reason=None):
 
         mod_log_channel = self.bot.get_channel(MOD_LOGS)
@@ -248,18 +248,25 @@ class Moderation(commands.Cog):
         await mod_log_channel.send(embed=mod_log_message)
         await ctx.channel.send(f"{member} has been kicked out!")
 
-    @commands.command()
-    @commands.has_any_role("Mods", "Admin")
-    async def warn(self, ctx, member: discord.Member = None, current_channel_id=None,  *, reason="Bad behaviour"):
+    @command()
+    @has_any_role("Mods", "Admin")
+    async def warn(self, ctx, member: discord.Member = None, current_channel_id=None,  *, reason=None):
         """
         Inserts the user to the infractions table and sends a warning message
         """
         mod_log_channel = self.bot.get_channel(MOD_LOGS)
 
-        warn_message = discord.Embed(
-            description=f"{member.mention} has been warned.\n**Reason:** " +
-            str(reason)
-        )
+        user_id, user_infractions = get_infractions(member.id)
+
+        if reason:
+            warn_message = discord.Embed(
+                description=f"{member.mention} has been warned.\n**Reason:** " +
+                str(reason)
+            )
+        else:
+            warn_message = discord.Embed(
+                description=f"{member.mention} has been warned."
+            )
 
         if current_channel_id:
             replace_char = ['<', '>', '#']
@@ -277,8 +284,35 @@ class Moderation(commands.Cog):
             moderator, member, reason)
 
         # add infractions to database
-        manage_infractions(member.id, 1)
-        await mod_log_channel.send(embed=mod_log_warn_message)
+        if user_infractions < 3:
+            # add infractions to database
+            manage_infractions(member.id, 1)
+            await mod_log_channel.send(embed=mod_log_warn_message)
+        else:
+
+            timeout_mute = 30
+            mod_log_mute_message = get_modlog_mute_msg(
+                self.bot, member, moderator, timeout_mute, reason)
+            role = discord.utils.get(member.guild.roles, name="Muted")
+            infraction_message = f"{member.mention} has been muted."
+
+            await member.add_roles(role)
+            # insert into muted_users table
+            manage_muted_users(member, timeout_mute, 1)
+            await member.send(infraction_message)
+            await mod_log_channel.send(embed=mod_log_mute_message)
+
+    @command(aliases=['clean', 'clear'])
+    @has_any_role("Mods", "Admin")
+    async def purge(self, ctx, number):
+        """
+        Deletes messages from the channel
+        """
+
+        deleted = await ctx.channel.purge(limit=int(number))
+
+        await ctx.channel.send('Deleted {} message(s)'.format(len(deleted)))
+        await ctx.channel.purge(limit=1)
 
 
 def setup(bot):

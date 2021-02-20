@@ -335,7 +335,7 @@ def get_mod_log_warn_message(moderator, member, reason):
     mod_log_warn_message = discord.Embed()
 
     mod_log_warn_message.set_author(
-        name="[Banned] " + str(member),
+        name="[Warned] " + str(member),
         icon_url=member.avatar_url
     )
 
