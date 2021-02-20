@@ -32,7 +32,7 @@ def check_banned_words(message):
     return banned_word_found
 
 
-def get_mod_message(bot, message, banned_word_found):
+def get_banned_wrd_message(bot, message, banned_word_found):
     """
     Creates discord.Embed message for current & mod-logs channels
 
@@ -220,7 +220,7 @@ def get_inf_muted_diff():
 
         infraction_diff_min.append(
             tuple((
-                user[0], ((curr_time - last_infraction).total_seconds() / 60.0))
+                user[0], user[1], ((curr_time - last_infraction).total_seconds() / 60.0))
             )
         )
 
@@ -265,11 +265,12 @@ def get_user_inf_muted_timeout():
 
     infraction_diff_min, muted_diff_min = get_inf_muted_diff()
 
-    timeout_inf = 10
+    timeout_inf = 30
     users_inf_timeout = []
     users_muted_timeout = []
 
     for user in infraction_diff_min:
+
         if user[2] > timeout_inf:
             users_inf_timeout.append(user[0])
 
@@ -325,3 +326,27 @@ def get_modlog_kick_ban_msg(bot, user, moderator, reason, msg_type):
         value=reason, inline=True)
 
     return mod_log_ban_message
+
+
+def get_mod_log_warn_message(moderator, member, reason):
+
+    mod_log_warn_message = discord.Embed()
+
+    mod_log_warn_message.set_author(
+        name="[Banned] " + str(member),
+        icon_url=member.avatar_url
+    )
+
+    mod_log_warn_message.add_field(
+        name='User',
+        value=f'{member.mention}', inline=True)
+
+    mod_log_warn_message.add_field(
+        name='Moderator',
+        value=f'{moderator.mention}', inline=True)
+
+    mod_log_warn_message.add_field(
+        name='Reason',
+        value=reason, inline=True)
+
+    return mod_log_warn_message

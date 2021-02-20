@@ -4,9 +4,9 @@ from dotenv import load_dotenv
 import os
 import asyncio
 
-from utils.moderation import check_banned_words, get_mod_message, \
+from utils.moderation import check_banned_words, get_banned_wrd_message, \
     get_infractions, get_infraction_msg, get_user_inf_muted_timeout, \
-    get_modlog_mute_msg, get_modlog_kick_ban_msg
+    get_modlog_mute_msg, get_modlog_kick_ban_msg, get_mod_log_warn_message
 
 from utils.database import manage_infractions, manage_muted_users
 
@@ -34,7 +34,7 @@ class Moderation(commands.Cog):
                 current_channel = message.channel
                 mod_log_channel = self.bot.get_channel(MOD_LOGS)
 
-                curr_channel_message, mod_log_warn_message = get_mod_message(
+                curr_channel_message, mod_log_warn_message = get_banned_wrd_message(
                     self.bot, message, banned_word_found)
 
                 reason = "Bad word usage"
@@ -74,13 +74,16 @@ class Moderation(commands.Cog):
     @tasks.loop(seconds=5.0)
     async def check_user_inf_mute_status(self):
         """
-        check for muted_users and infractions and clear them after 30 mins timeout
+        Check for muted_users and infractions and clear them after timeout
         """
 
         while not self.bot.is_closed():
             guild = self.bot.get_guild(GUILD)
 
             users_inf_timeout, users_muted_timeout = get_user_inf_muted_timeout()
+
+            for user in users_inf_timeout:
+                manage_infractions(user, 2)
 
             for user in users_muted_timeout:
                 manage_muted_users(user, 2)
@@ -139,7 +142,7 @@ class Moderation(commands.Cog):
     @commands.has_any_role("Mods", "Admin")
     async def mute(self, ctx, member: discord.Member = None, time_out=15.0, *, reason=None):
         """
-        Inserts the user from the muted_users table
+        Inserts the user to the muted_users table and sends a mute event message
         """
 
         # if mods or admin, the roles will be returned i.e. not None
@@ -175,14 +178,6 @@ class Moderation(commands.Cog):
         role = discord.utils.get(ctx.guild.roles, name="Muted")
 
         await member.remove_roles(role)
-
-        status = manage_muted_users(member, 2)
-        if status:
-            bot_message = discord.Embed(
-                description="User has been unmuted!"
-            )
-
-        await ctx.channel.send(embed=bot_message)
 
     @commands.command()
     @commands.has_any_role("Mods", "Admin")
@@ -252,6 +247,38 @@ class Moderation(commands.Cog):
         await ctx.guild.kick(member, reason=reason)
         await mod_log_channel.send(embed=mod_log_message)
         await ctx.channel.send(f"{member} has been kicked out!")
+
+    @commands.command()
+    @commands.has_any_role("Mods", "Admin")
+    async def warn(self, ctx, member: discord.Member = None, current_channel_id=None,  *, reason="Bad behaviour"):
+        """
+        Inserts the user to the infractions table and sends a warning message
+        """
+        mod_log_channel = self.bot.get_channel(MOD_LOGS)
+
+        warn_message = discord.Embed(
+            description=f"{member.mention} has been warned.\n**Reason:** " +
+            str(reason)
+        )
+
+        if current_channel_id:
+            replace_char = ['<', '>', '#']
+            for i in replace_char:
+                current_channel_id = current_channel_id.replace(i, '')
+
+            current_channel_id = int(current_channel_id)
+            current_channel = self.bot.get_channel(current_channel_id)
+
+            if current_channel:
+                await current_channel.send(embed=warn_message)
+
+        moderator = ctx.author
+        mod_log_warn_message = get_mod_log_warn_message(
+            moderator, member, reason)
+
+        # add infractions to database
+        manage_infractions(member.id, 1)
+        await mod_log_channel.send(embed=mod_log_warn_message)
 
 
 def setup(bot):
