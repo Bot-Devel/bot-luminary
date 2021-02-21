@@ -312,7 +312,7 @@ class Moderation(Cog):
         deleted = await ctx.channel.purge(limit=int(number))
 
         await ctx.channel.send('Deleted {} message(s)'.format(len(deleted)))
-        await ctx.channel.purge(limit=1)
+        await ctx.channel.purge(limit=1)  # Delete the bot's message
 
 
 def setup(bot):
