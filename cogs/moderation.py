@@ -314,6 +314,38 @@ class Moderation(Cog):
         await ctx.channel.send('Deleted {} message(s)'.format(len(deleted)))
         await ctx.channel.purge(limit=1)  # Delete the bot's message
 
+    @command(aliases=['server-info', 'ser-info'])
+    @has_any_role("Mods", "Admin")
+    async def server_info(self, ctx, member: discord.Member = None):
+        """
+        Display server info like member count, roles, Admins, Channels etc
+        """
+        admin_roles = [
+            role for role in ctx.guild.roles if role.permissions.administrator]
+        members = set(
+            [member.display_name for role in admin_roles for member in role.members])
+
+        embed = discord.Embed(
+            title=f'Server Information of {ctx.guild.name}',
+            color=0x8FE381, timestamp=ctx.message.created_at
+        )
+        embed.set_thumbnail(url=f'{ctx.guild.icon_url}')
+        embed.add_field(name="Owner", value=f"{ctx.guild.owner.display_name}")
+        embed.add_field(name="Admins", value=", " .join(
+            members))
+        embed.add_field(name="Members", value=f"{ctx.guild.member_count}")
+        embed.add_field(name="Server Roles", value=f"{len(ctx.guild.roles)}")
+        embed.add_field(name="Text Channels",
+                        value=f"{len(ctx.guild.text_channels)}")
+        embed.add_field(name="Voice Channels",
+                        value=f"{len(ctx.guild.voice_channels)}")
+        embed.add_field(name="Server Boosts",
+                        value=f"{ctx.guild.premium_subscription_count}")
+        embed.set_footer(
+            text=f"Server ID: {ctx.guild.id}")
+
+        await ctx.channel.send(embed=embed)
+
 
 def setup(bot):
     bot.add_cog(Moderation(bot))
