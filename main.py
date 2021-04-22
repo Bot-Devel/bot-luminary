@@ -119,5 +119,7 @@ async def on_message(message):
 
 keep_alive()  # To start the flask server
 
+
+bot.load_extension("cogs.logs")
 bot.load_extension("cogs.moderation")
 bot.run(TOKEN)
