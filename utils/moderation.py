@@ -32,7 +32,7 @@ def check_banned_words(message):
     return banned_word_found
 
 
-def get_mod_message(bot, message, banned_word_found):
+def get_banned_wrd_message(bot, message, banned_word_found):
     """
     Creates discord.Embed message for current & mod-logs channels
 
@@ -87,7 +87,7 @@ def get_mod_message(bot, message, banned_word_found):
     return curr_channel_message, mod_log_warn_message
 
 
-def get_modlog_mute_msg(bot, user_id, moderator, timeout_mute):
+def get_modlog_mute_msg(bot, member, moderator, timeout_mute, reason):
     """
     Creates discord.Embed message for mod-logs channels for muted events
 
@@ -97,18 +97,17 @@ def get_modlog_mute_msg(bot, user_id, moderator, timeout_mute):
                                            mod-logs channel
     """
 
-    user = bot.get_user(user_id)
-    user_avatar = user.avatar_url
+    user_avatar = member.avatar_url
 
     mod_log_mute_message = discord.Embed()
     mod_log_mute_message.set_author(
-        name="[Muted] " + str(user),
+        name="[Muted] " + str(member),
         icon_url=user_avatar
     )
 
     mod_log_mute_message.add_field(
         name='User',
-        value=f'{user.mention}', inline=True)
+        value=f'{member.mention}', inline=True)
 
     mod_log_mute_message.add_field(
         name='Moderator',
@@ -116,7 +115,7 @@ def get_modlog_mute_msg(bot, user_id, moderator, timeout_mute):
 
     mod_log_mute_message.add_field(
         name='Reason',
-        value='Bad word usage', inline=True)
+        value=reason, inline=True)
 
     mod_log_mute_message.add_field(
         name='Muted for',
@@ -136,7 +135,6 @@ def get_infractions(msg):
     user_infractions {int} : Contains the number of infractions for the user
     """
 
-    # select from table, add infractions
     if isinstance(msg, str):
         msg = msg.strip()
 
@@ -212,9 +210,10 @@ def get_inf_muted_diff():
         time = user[2]  # last_triggered column
 
         # to convert each list element into int, remove non-numeric characters
-        time = time.replace("-", ",")
-        time = time.replace(" ", ",")
-        time = time.replace(":", ",")
+        replace_sym = ['-', ' ', ':']
+        for i in replace_sym:
+            time = time.replace(i, ',')
+
         time = time.split(",")
 
         time = list(map(int, time))
@@ -222,17 +221,18 @@ def get_inf_muted_diff():
 
         infraction_diff_min.append(
             tuple((
-                user[0], ((curr_time - last_infraction).total_seconds() / 60.0))
+                user[0], user[1], ((curr_time - last_infraction).total_seconds() / 60.0))
             )
         )
 
     for user in muted_users:
-        time = user[1]  # last_triggered column
+        time = user[2]  # last_triggered column
 
         # to convert each list element into int, remove non-numeric characters
-        time = time.replace("-", ",")
-        time = time.replace(" ", ",")
-        time = time.replace(":", ",")
+        replace_sym = ['-', ' ', ':']
+        for i in replace_sym:
+            time = time.replace(i, ',')
+
         time = time.split(",")
 
         time = list(map(int, time))
@@ -240,14 +240,14 @@ def get_inf_muted_diff():
 
         muted_diff_min.append(
             tuple((
-                user[0], ((curr_time - last_muted).total_seconds() / 60.0))
+                user[0], user[1], ((curr_time - last_muted).total_seconds() / 60.0))
             )
         )
 
     return infraction_diff_min, muted_diff_min
 
 
-def get_user_inf_muted_timeout(timeout_inf, timeout_mute):
+def get_user_inf_muted_timeout():
     """
     Compares the user's difference in last infraction and mute with the
     timeout and creates two lists containg the users whose infractions
@@ -267,16 +267,88 @@ def get_user_inf_muted_timeout(timeout_inf, timeout_mute):
 
     infraction_diff_min, muted_diff_min = get_inf_muted_diff()
 
+    timeout_inf = 30
     users_inf_timeout = []
     users_muted_timeout = []
 
     for user in infraction_diff_min:
-        if user[1] > timeout_inf:
+
+        if user[2] > timeout_inf:
             users_inf_timeout.append(user[0])
 
     for user in muted_diff_min:
-        if user[1] > timeout_mute:
+
+        if user[2] > user[1]:  # user[1] is the time_out in the db
 
             users_muted_timeout.append(user[0])
 
     return users_inf_timeout, users_muted_timeout
+
+
+def get_modlog_kick_ban_msg(bot, user, moderator, reason, msg_type):
+    """
+    Creates discord.Embed message for mod-logs channels for ban events
+
+    # Returns
+
+    mod_log_ban_message {discord.Embed} : Embed message to be sent in the
+                                           mod-logs channel
+    """
+
+    user_avatar = user.avatar_url
+
+    mod_log_ban_message = discord.Embed()
+
+    if msg_type == 1:
+        mod_log_ban_message.set_author(
+            name="[Banned] " + str(user),
+            icon_url=user_avatar
+        )
+    elif msg_type == 2:
+        mod_log_ban_message.set_author(
+            name="[Unbanned] " + str(user),
+            icon_url=user_avatar
+        )
+    elif msg_type == 3:
+        mod_log_ban_message.set_author(
+            name="[Kicked] " + str(user),
+            icon_url=user_avatar
+        )
+
+    mod_log_ban_message.add_field(
+        name='User',
+        value=f'{user.mention}', inline=True)
+
+    mod_log_ban_message.add_field(
+        name='Moderator',
+        value=f'{moderator.mention}', inline=True)
+
+    mod_log_ban_message.add_field(
+        name='Reason',
+        value=reason, inline=True)
+
+    return mod_log_ban_message
+
+
+def get_mod_log_warn_message(moderator, member, reason):
+
+    mod_log_warn_message = discord.Embed()
+
+    mod_log_warn_message.set_author(
+        name="[Warned] " + str(member),
+        icon_url=member.avatar_url
+    )
+
+    mod_log_warn_message.add_field(
+        name='User',
+        value=f'{member.mention}', inline=True)
+
+    mod_log_warn_message.add_field(
+        name='Moderator',
+        value=f'{moderator.mention}', inline=True)
+
+    mod_log_warn_message.add_field(
+        name='Reason',
+        value=reason, inline=True)
+
+    return mod_log_warn_message

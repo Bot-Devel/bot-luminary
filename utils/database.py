@@ -30,20 +30,35 @@ def manage_infractions(message, operation):
     curr_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
     if operation == 1:  # insert/update table, add infractions
-        result = db.execute(
-            f"SELECT * FROM infractions WHERE user_id={message.author.id}")
+        if isinstance(message, int):
+            result = db.execute(
+                f"SELECT * FROM infractions WHERE user_id={message}")
+        else:
+            result = db.execute(
+                f"SELECT * FROM infractions WHERE user_id={message.author.id}")
 
         if len(result.cursor.fetchall()) != 0:  # if user found in table
+            if isinstance(message, int):
+                db.execute(
+                    f"UPDATE infractions SET infractions = infractions + 1, last_triggered = '{curr_time}' WHERE user_id={message}"
 
-            db.execute(
-                f"UPDATE infractions SET infractions = infractions + 1, last_triggered = '{curr_time}' WHERE user_id={message.author.id}"
+                )
+            else:
+                db.execute(
+                    f"UPDATE infractions SET infractions = infractions + 1, last_triggered = '{curr_time}' WHERE user_id={message.author.id}"
 
-            )
+                )
+
         else:
+            if isinstance(message, int):
 
-            db.execute(
-                f"INSERT INTO infractions VALUES ({message.author.id}, 1, '{curr_time}')"
-            )
+                db.execute(
+                    f"INSERT INTO infractions VALUES ({message}, 1, '{curr_time}')"
+                )
+            else:
+                db.execute(
+                    f"INSERT INTO infractions VALUES ({message.author.id}, 1, '{curr_time}')"
+                )
 
         db.commit()
         db.close()
@@ -66,7 +81,7 @@ def manage_infractions(message, operation):
         return show_infractions
 
 
-def manage_muted_users(message, operation):
+def manage_muted_users(member, operation, time_out=None):
     """
     Executes insert, update and delete for muted_users table
     Operation number is needed for the function.
@@ -85,21 +100,22 @@ def manage_muted_users(message, operation):
 
     if operation == 1:  # insert table, add muted_users
 
-        if isinstance(message, int):  # if message is the user_id
+        if isinstance(member, int):
             result = db.execute(
-                f"SELECT * FROM muted_users WHERE user_id={message}")
+                f"SELECT * FROM muted_users WHERE user_id={member}")
+
         else:
             result = db.execute(
-                f"SELECT * FROM muted_users WHERE user_id={message.author.id}")
+                f"SELECT * FROM muted_users WHERE user_id={member.id}")
 
         if len(result.cursor.fetchall()) == 0:  # if user not found in the table
-            if isinstance(message, int):  # if message is the user_id
+            if isinstance(member, int):  # if message is the user_id
                 db.execute(
-                    f"INSERT INTO muted_users VALUES ({message}, '{curr_time}')")
+                    f"INSERT INTO muted_users VALUES ({member}, {time_out}, '{curr_time}')")
 
             else:
                 db.execute(
-                    f"INSERT INTO muted_users VALUES ({message.author.id}, '{curr_time}')")
+                    f"INSERT INTO muted_users VALUES ({member.id}, {time_out}, '{curr_time}')")
 
         db.commit()
         db.close()
@@ -107,16 +123,26 @@ def manage_muted_users(message, operation):
 
     elif operation == 2:  # delete from table, remove muted_users
 
-        db.execute(
-            f"DELETE FROM muted_users WHERE user_id={message}")
+        print("member", member)
+        print("type", type(member))
+        if isinstance(member, int):  # if message is the user_id
+            db.execute(
+                f"DELETE FROM muted_users WHERE user_id={member}")
+        else:
+            db.execute(
+                f"DELETE FROM muted_users WHERE user_id={member.id}")
+
         db.commit()
         db.close()
         return True
 
     elif operation == 3:  # select from table, show muted_users
-
-        result = db.execute(f"SELECT * FROM muted_users \
-                             WHERE user_id={message}")
+        if isinstance(member, int):  # if message is the user_id
+            result = db.execute(f"SELECT * FROM muted_users \
+                                WHERE user_id={member}")
+        else:
+            result = db.execute(f"SELECT * FROM muted_users \
+                                WHERE user_id={member.id}")
 
         show_muted_users = result.cursor.fetchall()
         db.commit()
